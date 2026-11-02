@@ -5,7 +5,7 @@ import {registerLogout} from "../lib/axiosInstance";
 interface UsersData {
   id: number;
   email: string;
-  role: "user" | "admin" | "sudoadmin" | null;
+  role: "user" | null;
   user_name: string;
   profile_url: string | null;
 }
