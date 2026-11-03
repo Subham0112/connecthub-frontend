@@ -82,7 +82,7 @@ const EditModal = ({ post, setAlert, onClose, setPosts }: Props) => {
         <div className='flex items-center justify-between px-6 py-4 border-b border-[#EFECE4]'>
           <div>
             <h2 style={serif} className='text-[17px] font-medium text-[#26241F]'>Edit Post</h2>
-            <p className='text-[12.5px] text-[#9C978A] mt-0.5'>Media is shown but not editable</p>
+           
           </div>
           <button
             type='button'
@@ -112,8 +112,8 @@ const EditModal = ({ post, setAlert, onClose, setPosts }: Props) => {
           {post.media && post.media.length > 0 && (
             <div className='rounded-xl border border-[#E7E3DA] bg-white p-4'>
               <div className='mb-3'>
-                <p className='text-[13px] font-medium text-[#3A3833]'>Media</p>
-                <p className='text-[11.5px] text-[#9C978A] mt-0.5'>Existing attachments, display only</p>
+                <span className='text-[14px] font-medium text-[#3A3833]'>Media </span>
+                <span className='text-[12px] text-[#9C978A] mt-0.5'>(Cannot edit media)</span>
               </div>
               <input ref={fileRef} id='file' className='hidden' type='file' hidden />
 
@@ -121,7 +121,9 @@ const EditModal = ({ post, setAlert, onClose, setPosts }: Props) => {
                 {post.media.map((m) => (
                   <img key={m.media_id} src={m.file_url} alt='post media' className='h-24 w-24 object-cover rounded-lg border border-[#E7E3DA]' />
                 ))}
+                
               </div>
+               
             </div>
           )}
 

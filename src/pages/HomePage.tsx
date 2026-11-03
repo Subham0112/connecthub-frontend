@@ -6,7 +6,10 @@ import type { AlertData } from "../components/Alert";
 import CommentModal from "../components/CommentModal";
 import LikesModal from "../components/LikeModal";
 import PostModal from "../components/PostModal";
-import { FaThumbsUp, FaRegThumbsUp, FaRegComment, FaFire } from "react-icons/fa";
+import PostMedia from "../components/PostMedia";
+import LikersSummary, { type PostLiker } from "../components/LikersSummary";
+import { formatPostTime } from "../lib/postTime";
+import { FaThumbsUp, FaRegThumbsUp, FaRegComment } from "react-icons/fa";
 import {
   HiOutlineUser,
   HiOutlinePencilAlt,
@@ -37,11 +40,13 @@ export interface PostData {
   user_id: number;
   content: string;
   visiblity: string;
+  created_at?: string | null;
   media?: Media[];
   users?: UserData;
   likeCount: number;
   commentCount: number;
   likedByCurrentUser: boolean;
+  likers?: PostLiker[];
   score?: number;
 }
 
@@ -200,14 +205,33 @@ const HomePage = ({
         `/toggle-like/${postId}`,
         {}
       );
+      const liked = Boolean(res.data.liked);
+      const me = context?.user;
       setPosts((prev) =>
         prev.map((post) => {
           if (post.id !== postId) return post;
           const currentCount = post.likeCount;
+          const existing = post.likers ?? [];
+          let likers = existing;
+
+          if (liked && me && !existing.some((liker) => liker.id === me.id)) {
+            likers = [
+              {
+                id: me.id,
+                user_name: me.user_name,
+                profile_url: me.profile_url,
+              },
+              ...existing,
+            ].slice(0, 3);
+          } else if (!liked) {
+            likers = existing.filter((liker) => liker.id !== me?.id);
+          }
+
           return {
             ...post,
-            likedByCurrentUser: res.data.liked,
-            likeCount: res.data.liked ? currentCount + 1 : currentCount - 1,
+            likers,
+            likedByCurrentUser: liked,
+            likeCount: liked ? currentCount + 1 : currentCount - 1,
           };
         })
       );
@@ -353,7 +377,7 @@ const HomePage = ({
                 {posts.map((post) => (
                   <article
                     key={post.id}
-                    className="card-luxe card-hover overflow-hidden"
+                    className="card-luxe overflow-hidden"
                   >
                     <div className="flex items-center gap-3 px-6 pb-4 pt-6">
                       <img
@@ -371,18 +395,18 @@ const HomePage = ({
                         </p>
                         <div className="mt-1 flex items-center gap-1.5">
                           {post.visiblity === "all" ? (
-                            <BsGlobe className="text-ink-300" size={9} />
+                            <BsGlobe className="text-ink-300" size={12} />
                           ) : (
-                            <BsLock className="text-ink-300" size={9} />
+                            <BsLock className="text-ink-300" size={12} />
                           )}
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-ink-400">
-                            {post.visiblity === "all" ? "Public" : "Only me"}
-                          </span>
-                          {post.likeCount * 3 + post.commentCount * 4 >= 15 && (
-                            <span className="ml-1 flex items-center gap-1 rounded-full bg-clay-50 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-clay-600">
-                              <FaFire size={8} />
-                              Trending
-                            </span>
+                          
+                          {post.created_at && (
+                            <>
+                              <span className="text-ink-300">·</span>
+                              <span className="text-[10px] font-medium text-ink-400">
+                                {formatPostTime(post.created_at)}
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>
@@ -396,19 +420,17 @@ const HomePage = ({
                       </div>
                     )}
 
-                    {post.media && post.media.length > 0 && (
-                      <div className="mt-1 border-t border-ivory-300 bg-ivory-200">
-                        {post.media.map((m) => (
-                          <div key={m.media_id}>
-                            <img
-                              src={m.file_url}
-                              alt={m.filename}
-                              className="w-full max-h-[440px] object-cover"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <PostMedia media={post.media} />
+
+                    <LikersSummary
+                      likers={post.likers}
+                      likeCount={post.likeCount}
+                      isOwnPost={post.user_id === currentUser?.id}
+                      onOpen={() => {
+                        setLikesPostId(post.id);
+                        setShowLikesModal(true);
+                      }}
+                    />
 
                     {/* Actions */}
                     <div className="flex items-center border-t border-ivory-300 px-4 py-1">
@@ -427,16 +449,7 @@ const HomePage = ({
                           <FaRegThumbsUp size={13} />
                         )}
                         {post.likeCount > 0 ? (
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLikesPostId(post.id);
-                              setShowLikesModal(true);
-                            }}
-                            className="cursor-pointer hover:underline"
-                          >
-                            {post.likeCount}{" "}Like
-                          </span>
+                          <span>{post.likeCount} Like</span>
                         ) : (
                           <span>Like</span>
                         )}
@@ -560,15 +573,6 @@ const HomePage = ({
                   ))}
                 </div>
               )}
-            </div>
-
-            <div className="card-luxe mt-4 p-5 text-center">
-              <p style={serif} className="text-[15px] font-medium italic text-ink-700">
-                “A place for friends, stories and slow conversations.”
-              </p>
-              <p className="mt-2 text-[10.5px] font-bold uppercase tracking-[0.24em] text-gold-600">
-                ConnectHub
-              </p>
             </div>
           </aside>
         </div>

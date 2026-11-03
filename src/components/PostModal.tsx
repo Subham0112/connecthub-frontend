@@ -10,6 +10,8 @@ import api from '../lib/axiosInstance';
 // Shared type-scale helper for the display face used on names/titles.
 const serif = { fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif" };
 
+const MAX_FILES = 10;
+
 const PostModal = ({
   setAlert,
   onClose,
@@ -21,31 +23,35 @@ const PostModal = ({
 }) => {
   const [content, setContent] = useState<string>('');
   const [visibility, setVisibility] = useState<string>('all');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const context = useContext(UserDataContext);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
-    if (!file) { setPreview(null); return; }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    const urls = files.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
 
   if (!context) return null;
   const { user } = context;
 
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
   const handleUpload = async () => {
     try {
-      if (!content.trim() && !file) {
-        setAlert({ type: 'error', title: 'Empty Post', message: 'Post must have content or a file' });
+      if (!content.trim() && files.length === 0) {
+        setAlert({ type: 'error', title: 'Empty Post', message: 'Post must have content or media' });
         return;
       }
       setPosting(true);
       const formData = new FormData();
-      if (file) formData.append('file', file);
+      files.forEach((file) => formData.append('file', file));
       formData.append('userId', String(user.id));
       formData.append('content', content);
       formData.append('visibility', visibility);
@@ -55,11 +61,10 @@ const PostModal = ({
       );
       setPosts((prevPosts) => [...prevPosts, res.data.data]);
       setAlert({ type: 'success', title: 'Posted!', message: res.data.message });
-      setFile(null);
+      setFiles([]);
       setContent('');
       if (fileRef.current) fileRef.current.value = '';
       onClose();
-      console.log(res.data);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const data = err.response?.data;
@@ -123,16 +128,45 @@ const PostModal = ({
             className="w-full min-h-[120px] resize-none bg-transparent text-[#2A2822] text-[14.5px] leading-relaxed placeholder:text-[#C4BFB0] outline-none border-none focus:ring-0 p-0"
           />
 
-          {/* Image preview */}
-          {preview && (
-            <div className="relative rounded-xl overflow-hidden border border-[#E7E3DA]">
-              <img src={preview} alt="preview" className="w-full max-h-56 object-cover" />
-              <button
-                onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-[#26241F]/60 text-white flex items-center justify-center hover:bg-[#26241F]/80 transition-colors"
-              >
-                <HiX size={14} />
-              </button>
+          {/* Media previews */}
+          {previews.length > 0 && (
+            <div
+              className={`grid gap-2 ${
+                previews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+              }`}
+            >
+              {previews.map((preview, index) => (
+                <div
+                  key={preview}
+                  className="relative overflow-hidden rounded-xl border border-[#E7E3DA]"
+                >
+                  {files[index]?.type.startsWith('video/') ? (
+                    <video
+                      src={preview}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className={`w-full object-cover ${
+                        previews.length === 1 ? 'max-h-56' : 'h-32'
+                      }`}
+                    />
+                  ) : (
+                    <img
+                      src={preview}
+                      alt="preview"
+                      className={`w-full object-cover ${
+                        previews.length === 1 ? 'max-h-56' : 'h-32'
+                      }`}
+                    />
+                  )}
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#26241F]/60 text-white transition-colors hover:bg-[#26241F]/80"
+                  >
+                    <HiX size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -146,16 +180,28 @@ const PostModal = ({
               className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer text-[#8A8578] hover:bg-[#F7F6F2] hover:text-[#435B52] transition-colors text-[13px] font-medium"
             >
               <HiOutlinePhotograph size={17} />
-              <span>Photo</span>
+              <span>
+                Photos{files.length > 0 ? ` (${files.length})` : ''}
+              </span>
             </label>
             <input
               ref={fileRef}
               id="file-upload"
               type="file"
               hidden
+              multiple
               accept="image/*,video/*"
               onChange={(e) => {
-                if (e.target.files) setFile(e.target.files[0]);
+                const selected = Array.from(e.target.files ?? []);
+                if (selected.length > MAX_FILES) {
+                  setAlert({
+                    type: 'error',
+                    title: 'Too many files',
+                    message: `You can upload up to ${MAX_FILES} photos or videos at once`,
+                  });
+                }
+                setFiles(selected.slice(0, MAX_FILES));
+                if (fileRef.current) fileRef.current.value = '';
               }}
             />
 
@@ -168,7 +214,7 @@ const PostModal = ({
               </button>
               <button
                 onClick={handleUpload}
-                disabled={posting || (!content.trim() && !file)}
+                disabled={posting || (!content.trim() && files.length === 0)}
                 className="px-5 py-2 rounded-xl bg-[#26241F] hover:bg-[#3A3833] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-medium transition-colors duration-150"
               >
                 {posting ? 'Posting…' : 'Post'}

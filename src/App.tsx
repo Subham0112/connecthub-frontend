@@ -16,6 +16,8 @@ import HomePage from './pages/HomePage'
 import ProfilePage from './pages/ProfilePage'
 import Message from './pages/Message'
 import ChatPage from './pages/ChatPage'
+import SearchPage from './pages/SearchPage'
+import ScrollToTop from './components/ScrollToTop'
 
 
 const App = () => {
@@ -23,6 +25,7 @@ const App = () => {
   
   return (
     <>
+      <ScrollToTop />
  {alert && <Alert {...alert} onClose={()=>{
     setAlert(null)
  }} />}
@@ -61,6 +64,11 @@ const App = () => {
          <Route path="/messages/:userId" element={
           <ProtectectedRoute allowedRoles={["user"]} redirectTo="/login">
             <ChatPage setAlert={setAlert} />
+          </ProtectectedRoute>
+        } />
+        <Route path="/search" element={
+          <ProtectectedRoute allowedRoles={["user"]} redirectTo="/login">
+            <SearchPage setAlert={setAlert} />
           </ProtectectedRoute>
         } />
         <Route path="/forgot-password" element={<ForgotPassword setAlert={setAlert} />} />

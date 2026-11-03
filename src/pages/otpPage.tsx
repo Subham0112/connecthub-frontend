@@ -1,15 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import type { AlertData } from '../components/Alert';
 import AuthLayout from '../components/AuthLayout';
 import { BsKeyFill } from 'react-icons/bs';
 
+const OTP_TTL_SECONDS = 2 * 60;
+const OTP_SENT_AT_KEY = "otpSentAt";
+
+const getRemainingSeconds = () => {
+  const sentAt = Number(localStorage.getItem(OTP_SENT_AT_KEY));
+  if (!Number.isFinite(sentAt) || sentAt <= 0) return OTP_TTL_SECONDS;
+  const remaining = Math.ceil(
+    (sentAt + OTP_TTL_SECONDS * 1000 - Date.now()) / 1000
+  );
+  return Math.min(OTP_TTL_SECONDS, Math.max(0, remaining));
+};
+
+const formatCountdown = (totalSeconds: number) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
 
 const OtpPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<AlertData | null>> }) => {
   const [otp,setOtp]=useState<string>("");
+  const [verifying,setVerifying]=useState<boolean>(false);
+  const [resending,setResending]=useState<boolean>(false);
+  const [secondsLeft,setSecondsLeft]=useState<number>(getRemainingSeconds);
   const navigate=useNavigate();
   const email=localStorage.getItem("email");
+  const busy = verifying || resending;
+
+  useEffect(() => {
+    const tick = () => setSecondsLeft(getRemainingSeconds());
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
 
   const handleChange=(e:React.ChangeEvent<HTMLInputElement>)=>{
@@ -17,6 +45,8 @@ const OtpPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<Aler
   }
 
   const handleSubmitOTP=async()=>{
+  if (busy) return
+  setVerifying(true)
 try{
   
   const otpData={
@@ -49,15 +79,21 @@ try{
     })
   }
   console.error(err)
+}finally{
+  setVerifying(false)
 }
   }
   const resendOtp=async()=>{
+    if (busy || secondsLeft > 0) return
+    setResending(true)
     const resendEmail={
       email
     }
 try{
    const res=await axios.patch(`${import.meta.env.VITE_BACKEND_API}/resend-otp`,resendEmail);
     if(res.status===200){
+      localStorage.setItem(OTP_SENT_AT_KEY, String(Date.now()))
+      setSecondsLeft(OTP_TTL_SECONDS)
       setAlert({ type: 'info', title: 'OTP resent', message: res.data.message || 'A new OTP has been sent.' })
       return
     }
@@ -65,6 +101,8 @@ try{
   const errorMessage = axios.isAxiosError(err) ? err.response?.data?.message || err.message : "Unable to resend OTP."
   setAlert({ type: 'error', title: 'Resend failed', message: errorMessage })
   console.log(err)
+}finally{
+  setResending(false)
 }
  
 
@@ -103,10 +141,14 @@ try{
 
         <button
           onClick={handleSubmitOTP}
-          disabled={otp.trim().length < 4}
+          disabled={busy || otp.trim().length < 4}
+          aria-busy={verifying}
           className="btn-primary w-full py-3 text-[13.5px]"
         >
-          Verify and continue
+          {verifying && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
+          {verifying ? "Verifying…" : "Verify and continue"}
         </button>
       </div>
 
@@ -114,9 +156,15 @@ try{
         Didn't receive it?{" "}
         <button
           onClick={resendOtp}
-          className="font-semibold text-sage-700 transition-colors hover:text-sage-600 hover:underline"
+          disabled={busy || secondsLeft > 0}
+          aria-busy={resending}
+          className="font-semibold tabular-nums text-sage-700 transition-colors hover:text-sage-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Resend code
+          {resending
+            ? "Resending…"
+            : secondsLeft > 0
+              ? `Resend OTP in ${formatCountdown(secondsLeft)} min`
+              : "Resend OTP"}
         </button>
       </div>
     </AuthLayout>

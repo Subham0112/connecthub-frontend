@@ -28,6 +28,7 @@ const Register = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<Ale
     })
     const [showPassword, setShowPassword] = useState<boolean>(false)
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    const [loading, setLoading] = useState<boolean>(false)
     const navigate=useNavigate()
     const context =useContext(UserDataContext)
 
@@ -45,6 +46,8 @@ const Register = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<Ale
     const {setUser}=context;
 
     const handleSubmit = async () => {
+        if (loading) return
+        setLoading(true)
         setFieldErrors({})
 
         try {
@@ -79,6 +82,8 @@ const Register = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<Ale
             } else {
                 setAlert({ type: 'error', title: 'Register failed', message: "Registration failed." })
             }
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -148,8 +153,16 @@ const Register = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<Ale
               {fieldErrors.password && <p className="text-xs font-medium text-clay-600">{fieldErrors.password}</p>}
             </div>
 
-            <button onClick={handleSubmit} className="btn-primary w-full py-3 text-[13.5px]">
-              Create account
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              aria-busy={loading}
+              className="btn-primary w-full py-3 text-[13.5px]"
+            >
+              {loading && (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              )}
+              {loading ? "Creating account…" : "Create account"}
             </button>
           </div>
 

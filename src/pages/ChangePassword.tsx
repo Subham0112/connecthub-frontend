@@ -18,6 +18,7 @@ const ChangePasswordPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetState
     })
     const [showPassword,setShowPassword]=useState<boolean>(false)
     const [showChangePassword,setShowChangePassword]=useState<boolean>(false)
+    const [loading,setLoading]=useState<boolean>(false)
     const context=useContext(UserDataContext);
     if(!context) return null
     const {user} = context
@@ -30,6 +31,8 @@ const ChangePasswordPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetState
     }
 
     const handleChangePassword=async ()=>{
+        if(loading) return
+        setLoading(true)
         try{
             const updateData={
                 email:user.email,
@@ -63,6 +66,8 @@ const ChangePasswordPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetState
       message:"Error Changing Password"
     })
   }
+        }finally{
+            setLoading(false)
         }
     }
   return (
@@ -120,10 +125,14 @@ const ChangePasswordPage = ({setAlert}:{ setAlert: React.Dispatch<React.SetState
 
         <button
           onClick={handleChangePassword}
-          disabled={!changeData.password || !changeData.changePassword}
+          disabled={loading || !changeData.password || !changeData.changePassword}
+          aria-busy={loading}
           className="btn-primary w-full py-3 text-[13.5px]"
         >
-          Update password
+          {loading && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
+          {loading ? "Updating…" : "Update password"}
         </button>
       </div>
     </AuthLayout>

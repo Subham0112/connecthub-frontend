@@ -10,6 +10,7 @@ import { BsEnvelope } from 'react-icons/bs';
 
 const ForgotPassword = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateAction<AlertData | null>> }) => {
     const [email,setEmail]=useState<string>("");
+    const [loading,setLoading]=useState<boolean>(false);
 
 
     const navigate=useNavigate();
@@ -20,10 +21,12 @@ const ForgotPassword = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateActi
     }
 
 const handleForgotClick=async ()=>{
-    
+    if (loading) return
+    setLoading(true)
     try{
        const res= await axios.post(`${import.meta.env.VITE_BACKEND_API}/forget-password`,{email})
         localStorage.setItem("email",email)
+        localStorage.setItem("otpSentAt", String(Date.now()))
         
         setAlert({ type: 'success', title: 'OTP Sent', message: res.data.message })
         navigate('/otp-page')
@@ -46,6 +49,8 @@ const handleForgotClick=async ()=>{
     })
   }
         console.error(err)
+    }finally{
+        setLoading(false)
     }
 }
 
@@ -73,10 +78,14 @@ const handleForgotClick=async ()=>{
 
         <button
           onClick={handleForgotClick}
-          disabled={!email.trim()}
+          disabled={loading || !email.trim()}
+          aria-busy={loading}
           className="btn-primary w-full py-3 text-[13.5px]"
         >
-          Send me an OTP
+          {loading && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
+          {loading ? "Sending…" : "Send me an OTP"}
         </button>
       </div>
 

@@ -26,6 +26,7 @@ const [usersData, setUsersData] = useState<UserData>({
 })  
 const [showPassword,setShowPassword]=useState<boolean>(false);
 const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+const [loading, setLoading] = useState<boolean>(false)
 
 const navigate=useNavigate();
 
@@ -63,7 +64,9 @@ const handleChange=(e:ChangeEvent<HTMLInputElement>)=>{
 }
 
 const handleSubmit =async ()=>{
-        setFieldErrors({})
+    if (loading) return
+    setLoading(true)
+    setFieldErrors({})
     try{
         const res=await axios.post(`${import.meta.env.VITE_BACKEND_API}/login`,usersData,{
             withCredentials:true
@@ -105,13 +108,14 @@ const handleSubmit =async ()=>{
             } else {
                 setAlert({ type: 'error', title: 'Login failed', message: "Login failed." })
             }
+         } finally {
+            setLoading(false)
          }
 }
   return (
     <AuthLayout
       eyebrow="Welcome back"
       title="Log in to ConnectHub"
-      subtitle="Pick up where you left off — your circle has been waiting."
     >
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -164,8 +168,16 @@ const handleSubmit =async ()=>{
           {fieldErrors.password && <p className="text-xs font-medium text-clay-600">{fieldErrors.password}</p>}
         </div>
 
-        <button onClick={handleSubmit} className="btn-primary w-full py-3 text-[13.5px]">
-          Log in
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          aria-busy={loading}
+          className="btn-primary w-full py-3 text-[13.5px]"
+        >
+          {loading && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
+          {loading ? "Logging in…" : "Log in"}
         </button>
       </div>
 

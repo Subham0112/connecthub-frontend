@@ -16,7 +16,6 @@ const AuthLayout = ({
   children,
   eyebrow,
   title,
-  subtitle,
   admin = false,
 }: AuthLayoutProps) => {
   return (
@@ -51,16 +50,11 @@ const AuthLayout = ({
             </div>
             <div>
               <p style={serif} className="text-lg leading-none font-medium text-ivory-100">ConnectHub</p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-ink-300">
-                {admin ? "Manage & moderate" : "A place to belong"}
-              </p>
+            
             </div>
           </div>
 
           <div>
-            <p className="mb-6 text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-500">
-              {admin ? "Admin Console" : "Social, refined"}
-            </p>
             <h1
               style={serif}
               className="text-[34px] leading-[1.15] font-light text-ivory-50 xl:text-[40px]"
@@ -73,16 +67,14 @@ const AuthLayout = ({
                 </>
               ) : (
                 <>
-                  Share life’s moments,
+                  Where every connection begins.
                   <br />
-                  <em className="font-normal text-ivory-100">beautifully told.</em>
+                 
                 </>
               )}
             </h1>
             <p className="mt-5 max-w-md text-[13.5px] leading-relaxed text-ink-300">
-              {admin
-                ? "A calm, considered console for the people who keep ConnectHub safe — review members, manage access and keep the community thriving."
-                : "A calm corner of the internet for friends, stories and slow conversations — made with soft tones, thoughtful type and care."}
+     Connect with friends, share your moments, and discover the stories that bring us together.
             </p>
           </div>
 
@@ -116,7 +108,6 @@ const AuthLayout = ({
               <h2 style={serif} className="text-[26px] font-medium tracking-tight text-ink-900">
                 {title}
               </h2>
-              {subtitle && <p className="mt-1.5 text-[13px] leading-relaxed text-ink-400">{subtitle}</p>}
             </div>
             {children}
           </div>

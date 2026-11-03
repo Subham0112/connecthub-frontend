@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserDataContext } from "../context/userContext";
 import {
+  FaEllipsisH,
   FaRegEdit,
   FaRegTrashAlt,
   FaRegThumbsUp,
@@ -15,13 +16,14 @@ import LikeModal from "../components/LikeModal";
 import type { AlertData } from "../components/Alert";
 import EditModal from "../components/EditModal";
 import PostModal from "../components/PostModal";
+import PostMedia from "../components/PostMedia";
+import LikersSummary, { type PostLiker } from "../components/LikersSummary";
+import { formatPostTime } from "../lib/postTime";
 import ProfileUploadModal from "../components/ProfileModal";
 import Navbar from "../components/Navbar";
 import {
   BsGlobe,
   BsLock,
-  BsHeart,
-  BsPeople,
   BsEnvelopeFill,
 } from "react-icons/bs";
 import {
@@ -53,11 +55,13 @@ export interface PostData {
   user_id: number;
   content: string;
   visiblity: string;
+  created_at?: string | null;
   media?: Media[];
   users?: UserData;
   likeCount: number;
   commentCount: number;
   likedByCurrentUser: boolean;
+  likers?: PostLiker[];
 }
 
 interface FriendUser {
@@ -135,8 +139,16 @@ const UserDashboard = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   const context = useContext(UserDataContext);
+
+  useEffect(() => {
+    if (openMenuId === null) return;
+    const closeMenu = () => setOpenMenuId(null);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [openMenuId]);
 
   useEffect(() => {
     if (!context) return;
@@ -202,14 +214,32 @@ const UserDashboard = ({
   const handleLikeToggle = async (postId: number) => {
     try {
       const res = await api.post(`/toggle-like/${postId}`, {});
+      const liked = Boolean(res.data.liked);
       setPosts((prev) =>
         prev.map((post) => {
           if (post.id !== postId) return post;
           const currentCount = post.likeCount ?? 0;
+          const existing = post.likers ?? [];
+          let likers = existing;
+
+          if (liked && !existing.some((liker) => liker.id === user.id)) {
+            likers = [
+              {
+                id: user.id,
+                user_name: user.user_name,
+                profile_url: user.profile_url,
+              },
+              ...existing,
+            ].slice(0, 3);
+          } else if (!liked) {
+            likers = existing.filter((liker) => liker.id !== user.id);
+          }
+
           return {
             ...post,
-            likedByCurrentUser: res.data.liked,
-            likeCount: res.data.liked ? currentCount + 1 : currentCount - 1,
+            likers,
+            likedByCurrentUser: liked,
+            likeCount: liked ? currentCount + 1 : currentCount - 1,
           };
         }),
       );
@@ -398,61 +428,7 @@ const UserDashboard = ({
           {/* Left column — scrolls naturally with the page */}
           <aside className="w-full shrink-0 lg:w-[300px]">
             {/* At a glance */}
-            <div className="card-luxe mb-5 p-5">
-              <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-300">
-                At a glance
-              </h3>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between rounded-xl bg-ivory-100 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-clay-100 text-clay-600">
-                      <BsHeart size={13} />
-                    </span>
-                    <span className="text-[12.5px] font-bold uppercase tracking-wide text-ink-400">
-                      Likes
-                    </span>
-                  </div>
-                  <span
-                    style={serif}
-                    className="text-xl font-medium text-ink-900"
-                  >
-                    {totalLikes.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-ivory-100 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sage-100 text-sage-700">
-                      <HiOutlinePencilAlt size={13} />
-                    </span>
-                    <span className="text-[12.5px] font-bold uppercase tracking-wide text-ink-400">
-                      Posts
-                    </span>
-                  </div>
-                  <span
-                    style={serif}
-                    className="text-xl font-medium text-ink-900"
-                  >
-                    {posts.length.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-ivory-100 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-50 text-gold-600">
-                      <BsPeople size={14} />
-                    </span>
-                    <span className="text-[12.5px] font-bold uppercase tracking-wide text-ink-400">
-                      Friends
-                    </span>
-                  </div>
-                  <span
-                    style={serif}
-                    className="text-xl font-medium text-ink-900"
-                  >
-                    {otherFriends.length.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
+           
 
             {/* Shortcuts */}
             <SideCard title="Shortcuts">
@@ -563,7 +539,7 @@ const UserDashboard = ({
                     {posts.map((post) => (
                       <div
                         key={post.id}
-                        className="card-luxe card-hover overflow-hidden"
+                        className="card-luxe overflow-hidden"
                       >
                         <div className="flex items-center justify-between px-6 pt-6 pb-4 sm:px-7">
                           <div className="flex min-w-0 items-center gap-3">
@@ -583,40 +559,73 @@ const UserDashboard = ({
                                 {post.visiblity === "all" ? (
                                   <BsGlobe
                                     className="shrink-0 text-ink-300"
-                                    size={9}
+                                    size={12}
                                   />
                                 ) : (
                                   <BsLock
                                     className="shrink-0 text-ink-300"
-                                    size={9}
+                                    size={12}
                                   />
                                 )}
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                                  {post.visiblity === "all"
-                                    ? "Public"
-                                    : "Only me"}
-                                </span>
+                               
+                                {post.created_at && (
+                                  <>
+                                    <span className="text-ink-300">·</span>
+                                    <span className="text-[10px] font-medium text-ink-400">
+                                      {formatPostTime(post.created_at)}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-1">
+                          <div className="relative flex shrink-0 items-center">
                             <button
-                              onClick={() => {
-                                setSelectedPost(post);
-                                setShowEditModal(true);
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenMenuId((current) =>
+                                  current === post.id ? null : post.id
+                                );
                               }}
                               className="icon-btn"
-                              aria-label="Edit post"
+                              aria-label="Post options"
+                              aria-haspopup="menu"
+                              aria-expanded={openMenuId === post.id}
                             >
-                              <FaRegEdit size={13} />
+                              <FaEllipsisH size={14} />
                             </button>
-                            <button
-                              onClick={() => handlePostDelete(post.id)}
-                              className="icon-btn hover:bg-clay-100 hover:text-clay-600"
-                              aria-label="Delete post"
-                            >
-                              <FaRegTrashAlt size={13} />
-                            </button>
+
+                            {openMenuId === post.id && (
+                              <div
+                                role="menu"
+                                onClick={(event) => event.stopPropagation()}
+                                className="absolute right-0 top-9 z-30 w-44 overflow-hidden rounded-xl border border-ivory-300 bg-white py-1 shadow-[0_12px_32px_rgba(31,29,26,0.16)]"
+                              >
+                                <button
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setSelectedPost(post);
+                                    setShowEditModal(true);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-ink-700 transition-colors hover:bg-ivory-100"
+                                >
+                                  <FaRegEdit size={12} />
+                                  Edit post
+                                </button>
+                                <button
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    handlePostDelete(post.id);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-clay-600 transition-colors hover:bg-clay-100"
+                                >
+                                  <FaRegTrashAlt size={12} />
+                                  Delete post
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -628,19 +637,17 @@ const UserDashboard = ({
                           </div>
                         )}
 
-                        {post.media &&
-                          post.media.filter(Boolean).length > 0 && (
-                            <div className="mt-1 border-t border-ivory-300 bg-ivory-200">
-                              {post.media.filter(Boolean).map((media) => (
-                                <img
-                                  key={media.media_id}
-                                  src={media.file_url}
-                                  alt="post media"
-                                  className="w-full max-h-[420px] object-cover"
-                                />
-                              ))}
-                            </div>
-                          )}
+                        <PostMedia media={post.media} />
+
+                        <LikersSummary
+                          likers={post.likers}
+                          likeCount={post.likeCount}
+                          isOwnPost={post.user_id === user.id}
+                          onOpen={() => {
+                            setLikesPostId(post.id);
+                            setShowLikesModal(true);
+                          }}
+                        />
 
                         <div className="flex gap-2 items-center border-t border-ivory-300 px-4 py-1">
                           <button
@@ -657,16 +664,7 @@ const UserDashboard = ({
                               <FaRegThumbsUp size={13} />
                             )}
                             {post.likeCount > 0 ? (
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLikesPostId(post.id);
-                                  setShowLikesModal(true);
-                                }}
-                                className="cursor-pointer hover:underline"
-                              >
-                                {post.likeCount} Like
-                              </span>
+                              <span>{post.likeCount} Like</span>
                             ) : (
                               <span>Like</span>
                             )}

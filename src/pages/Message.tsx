@@ -93,7 +93,11 @@ const Messages = ({ setAlert }: { setAlert: React.Dispatch<React.SetStateAction<
 
     const socket = connectSocket(currentUserId)
 
-    socket.on("receive_message", (message) => {
+    const handleReceiveMessage = (message: {
+      sender_id: number
+      messages: string
+      created_at: string
+    }) => {
       if (message.sender_id === currentUserId) return
 
       setConversations((prev) => {
@@ -120,10 +124,12 @@ const Messages = ({ setAlert }: { setAlert: React.Dispatch<React.SetStateAction<
         fetchConversations()
         return prev
       })
-    })
+    }
+
+    socket.on("receive_message", handleReceiveMessage)
 
     return () => {
-      socket.disconnect()
+      socket.off("receive_message", handleReceiveMessage)
     }
   }, [currentUserId])
 

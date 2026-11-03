@@ -6,12 +6,15 @@ import { UserDataContext } from "../context/userContext"
 import { HiHome, HiOutlineHome } from "react-icons/hi"
 import { IoChatbubbleOutline, IoChatbubble } from "react-icons/io5"
 import { HiUserGroup, HiOutlineUserGroup } from "react-icons/hi"
+import { BsSearch } from "react-icons/bs"
 import RequestModal from "./RequestModal"
 
 import { HiOutlineLogout } from "react-icons/hi"
 import ConfirmModal from "./ConfirmModal"
+import SearchBar from "./SearchBar"
+import NotificationBell from "./NotificationBell"
 import skeletonProfile from "../assets/img/skeleton_profile.jpg"
-import { connectSocket } from "../lib/socket"
+import { connectSocket, disconnectSocket } from "../lib/socket"
 
 const serif = { fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif" };
 
@@ -44,8 +47,10 @@ useEffect(() => {
 }, [context?.user?.id])
   
  useEffect(() => {
-    if (!context?.user?.id) return
-
+    if (!context?.user?.id) {
+      disconnectSocket()
+      return
+    }
 
     const fetchUnread = async () => {
       try {
@@ -90,7 +95,6 @@ useEffect(() => {
       socket.off("friend_request_count", onFriendRequestCount)
       socket.off("friend_request_received", onFriendRequestReceived)
       socket.off("friend_request_cancelled", onFriendRequestCancelled)
-      socket.disconnect()
     }
   }, [context?.user?.id])
 
@@ -124,6 +128,7 @@ useEffect(() => {
         { withCredentials: true }
       )
       console.log(res.data.message)
+      disconnectSocket()
       setUser({ id: 0, email: "", role: null, user_name: "", profile_url: null })
       navigate("/login")
     } catch (err) {
@@ -139,21 +144,34 @@ useEffect(() => {
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-ivory-400/80 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-[64px] max-w-[1280px] items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-[64px] max-w-[1280px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
 
         {/* Logo */}
         <div
           onClick={() => navigate("/homepage")}
-          className="flex cursor-pointer select-none items-center gap-2.5"
+          className="flex shrink-0 cursor-pointer select-none items-center gap-2.5"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-900 shadow-sm">
             <span style={serif} className="text-[13px] font-medium text-white">CH</span>
           </div>
-          <span style={serif} className="text-lg font-medium tracking-tight text-ink-900">ConnectHub</span>
+          <span style={serif} className="hidden text-lg font-medium tracking-tight text-ink-900 sm:inline">ConnectHub</span>
         </div>
 
-        {/* Nav Links */}
-        <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
+        {/* Search — left side on desktop, icon on mobile */}
+        <div className="hidden min-w-0 flex-1 md:block md:max-w-[240px] lg:max-w-[340px]">
+          <SearchBar />
+        </div>
+
+        {/* Main nav — Home, Messages, Profile, Requests all on the left */}
+        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+          <button
+            onClick={() => navigate("/search")}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-ivory-100 hover:text-ink-800 md:hidden"
+            aria-label="Search"
+          >
+            <BsSearch size={17} />
+          </button>
+
           <NavButton
             onClick={() => navigate("/homepage")}
             active={isActive("/homepage")}
@@ -161,7 +179,6 @@ useEffect(() => {
             label="Home"
           />
 
-          {/* Messages button with badge */}
           <div className="relative">
             <NavButton
               onClick={() => navigate("/messages")}
@@ -170,26 +187,32 @@ useEffect(() => {
               label="Messages"
             />
             {totalUnread > 0 && (
-              <span className="absolute right-2.5 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
+              <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
                 {totalUnread > 99 ? "99+" : totalUnread}
               </span>
             )}
           </div>
+
+         
         </div>
 
-        {/* Avatar + Requests + Logout */}
-        <div className="flex items-center gap-1">
-          <div
+        {/* Notifications + Logout on the right */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <NotificationBell />
+           <button
             onClick={() => navigate("/dashboard")}
-            className="group flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 transition-colors duration-150 hover:bg-ivory-100"
+            className="group flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-ivory-100 sm:px-3"
           >
             <img
               src={user.profile_url || skeletonProfile}
               alt={user.user_name}
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-ivory-400"
+              className="h-7 w-7 rounded-full object-cover ring-1 ring-ivory-400"
             />
-            <span className="text-[10px] font-medium tracking-wide text-ink-300 group-hover:text-ink-600">Profile</span>
-          </div>
+            <span className="hidden text-[10px] font-medium tracking-wide text-ink-300 group-hover:text-ink-600 lg:block">
+              Profile
+            </span>
+          </button>
+
           <div className="relative">
             <NavButton
               onClick={() => setShowRequestModal(!showRequestModal)}
@@ -198,7 +221,7 @@ useEffect(() => {
               label="Requests"
             />
             {pendingRequestCount > 0 && (
-              <span className="absolute right-2.5 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-gold-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
+              <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-gold-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
                 {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
               </span>
             )}
@@ -206,7 +229,7 @@ useEffect(() => {
           <button
             onClick={() => setShowLogoutModal(true)}
             disabled={loggingOut}
-            className="ml-1 flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-ink-400 transition-colors duration-150 hover:bg-clay-100 hover:text-clay-600"
+            className="ml-1 flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold text-ink-400 transition-colors duration-150 hover:bg-clay-100 hover:text-clay-600 sm:px-3"
           >
             <HiOutlineLogout size={16} />
             <span className="hidden sm:inline">{loggingOut ? "Signing out…" : "Logout"}</span>
@@ -246,7 +269,7 @@ const NavButton = ({
 }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 rounded-xl px-4 py-1.5 transition-colors duration-150
+    className={`flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-150 sm:px-3 lg:px-4
       ${
         active
           ? "bg-sage-100 text-sage-700"
@@ -254,7 +277,7 @@ const NavButton = ({
       }`}
   >
     {icon}
-    <span className={`text-[10px] font-semibold tracking-wide ${active ? "text-sage-700" : "text-ink-300"}`}>
+    <span className={`hidden text-[10px] font-semibold tracking-wide lg:block ${active ? "text-sage-700" : "text-ink-300"}`}>
       {label}
     </span>
   </button>

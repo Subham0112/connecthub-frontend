@@ -12,21 +12,24 @@ const ResetPassword = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateActio
     const [confirmPassword,setConfirmPassword]=useState<string>('')
     const [showPassword,setShowPassword]=useState<boolean>(false);
     const [showConfirmPassword,setShowConfirmPassword]=useState<boolean>(false);
+    const [loading,setLoading]=useState<boolean>(false);
 
     const navigate=useNavigate();
     
 
     const handleSubmit=async()=>{
+      if(loading) return
+      if(newPassword!==confirmPassword){
+        setAlert({ type: 'error', title: 'Password mismatch', message: 'New password and confirmation must match.' })
+        return
+      }
       const email=localStorage.getItem("email")
       const resetData={
         newPassword,
         email
       }
+      setLoading(true)
       try{
-        if(newPassword!==confirmPassword){
-          setAlert({ type: 'error', title: 'Password mismatch', message: 'New password and confirmation must match.' })
-          return
-        }
         const res = await axios.patch(`${import.meta.env.VITE_BACKEND_API}/reset-password`,resetData)
         setAlert({ type: 'success', title: 'Password reset', message: res.data.message })
         navigate("/login")
@@ -48,6 +51,8 @@ const ResetPassword = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateActio
       message:"Failed to Reset Password"
     })
   }
+      }finally{
+        setLoading(false)
       }
     }
 
@@ -106,10 +111,14 @@ const ResetPassword = ({setAlert}:{ setAlert: React.Dispatch<React.SetStateActio
 
         <button
           onClick={handleSubmit}
-          disabled={!newPassword || !confirmPassword}
+          disabled={loading || !newPassword || !confirmPassword}
+          aria-busy={loading}
           className="btn-primary w-full py-3 text-[13.5px]"
         >
-          Reset password
+          {loading && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
+          {loading ? "Resetting…" : "Reset password"}
         </button>
 
         <button

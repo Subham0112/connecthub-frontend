@@ -6,18 +6,19 @@ import {
   BsFillPersonCheckFill,
   BsFillPersonXFill,
   BsEnvelopeFill,
-  BsHeart,
   BsGlobe,
   BsLock,
   BsPersonFillAdd,
 } from "react-icons/bs";
 import { ImCross } from "react-icons/im";
-import { HiOutlinePencilAlt } from "react-icons/hi";
 import api from "../lib/axiosInstance";
 import axios from "axios";
 import { getSocket } from "../lib/socket";
 import CommentModal from "../components/CommentModal";
 import LikeModal from "../components/LikeModal";
+import PostMedia from "../components/PostMedia";
+import LikersSummary, { type PostLiker } from "../components/LikersSummary";
+import { formatPostTime } from "../lib/postTime";
 import type { AlertData } from "../components/Alert";
 import Navbar from "../components/Navbar";
 import { UserDataContext } from "../context/userContext";
@@ -39,16 +40,27 @@ interface UserData {
   profile_url?: string | null;
 }
 
+interface FriendRecord {
+  friends_id: number;
+  sender_id: number;
+  receiver_id: number;
+  friend_status: string;
+  req_sender: UserData;
+  req_receiver: UserData;
+}
+
 export interface PostData {
   id: number;
   user_id: number;
   content: string;
   visiblity: string;
+  created_at?: string | null;
   media?: Media[];
   users?: UserData;
   likeCount: number;
   commentCount: number;
   likedByCurrentUser: boolean;
+  likers?: PostLiker[];
 }
 
 const serif = { fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif" };
@@ -97,6 +109,8 @@ const ProfilePage = ({
   const [likesPostId, setLikesPostId] = useState<number | null>(null);
   const [friendStatus, setFriendStatus] = useState<string>("none");
   const [showUnfriendModal, setShowUnfriendModal] = useState(false);
+  const [profileFriends, setProfileFriends] = useState<FriendRecord[]>([]);
+  const [showAllFriends, setShowAllFriends] = useState(false);
 
   const navigate = useNavigate();
   const context = useContext(UserDataContext);
@@ -106,10 +120,15 @@ const ProfilePage = ({
   const isOwnProfile = context?.user?.id === user_id;
 
   useEffect(() => {
+    let cancelled = false;
+
+    setProfileFriends([]);
+    setShowAllFriends(false);
+
     const fetchUser = async () => {
       try {
         const res = await api.get(`/user/${user_id}`);
-        setProfileUser(res.data.user);
+        if (!cancelled) setProfileUser(res.data.user);
       } catch (err) {
         console.log("Error fetching user", err);
       }
@@ -117,7 +136,7 @@ const ProfilePage = ({
     const fetchUserPosts = async () => {
       try {
         const res = await api.get(`/get-post/${user_id}`);
-        setPosts(res.data.posts);
+        if (!cancelled) setPosts(res.data.posts);
       } catch (err) {
         console.log("Error fetching posts", err);
       }
@@ -125,17 +144,30 @@ const ProfilePage = ({
     const fetchUserFriedsStatus = async () => {
       try {
         const res = await api.get(`/friend-status/${user_id}`);
-        setFriendStatus(res.data.status);
+        if (!cancelled) setFriendStatus(res.data.status);
       } catch (err) {
         console.log("Error fetching friend status", err);
+      }
+    };
+    const fetchProfileFriends = async () => {
+      try {
+        const res = await api.get(`/userFriends/${user_id}`);
+        if (!cancelled) setProfileFriends(res.data.friends ?? []);
+      } catch (err) {
+        console.log("Error fetching profile friends", err);
       }
     };
     if (otherUserId) {
       fetchUser();
       fetchUserPosts();
       fetchUserFriedsStatus();
+      fetchProfileFriends();
     }
-  }, [otherUserId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [otherUserId, user_id]);
 
   // ── Realtime friend-status updates ────────────────────────────────────
   // The Add Friend / Cancel / Accept / Friends button changes instantly
@@ -144,6 +176,8 @@ const ProfilePage = ({
     const socket = getSocket();
     const me = context?.user?.id;
     if (!socket || !me || !user_id) return;
+
+    let active = true;
 
     const onAccepted = (data: { sender_id: number; receiver_id: number }) => {
       // I sent a request to this user and they accepted it
@@ -175,13 +209,26 @@ const ProfilePage = ({
         setFriendStatus("none");
       }
     };
+    const refreshFriends = async () => {
+      try {
+        const res = await api.get(`/userFriends/${user_id}`);
+        if (active) setProfileFriends(res.data.friends ?? []);
+      } catch (err) {
+        console.log("Error refreshing profile friends", err);
+      }
+    };
 
+    socket.on("friend_request_accepted", refreshFriends);
+    socket.on("friend_removed", refreshFriends);
     socket.on("friend_request_accepted", onAccepted);
     socket.on("friend_request_rejected", onRejected);
     socket.on("friend_request_received", onReceived);
     socket.on("friend_request_cancelled", onCancelled);
     socket.on("friend_removed", onRemoved);
     return () => {
+      active = false;
+      socket.off("friend_request_accepted", refreshFriends);
+      socket.off("friend_removed", refreshFriends);
       socket.off("friend_request_accepted", onAccepted);
       socket.off("friend_request_rejected", onRejected);
       socket.off("friend_request_received", onReceived);
@@ -193,14 +240,33 @@ const ProfilePage = ({
   const handleLikeToggle = async (postId: number) => {
     try {
       const res = await api.post(`/toggle-like/${postId}`, {});
+      const liked = Boolean(res.data.liked);
+      const me = context?.user;
       setPosts((prev) =>
         prev.map((post) => {
           if (post.id !== postId) return post;
           const currentCount = post.likeCount ?? 0;
+          const existing = post.likers ?? [];
+          let likers = existing;
+
+          if (liked && me && !existing.some((liker) => liker.id === me.id)) {
+            likers = [
+              {
+                id: me.id,
+                user_name: me.user_name,
+                profile_url: me.profile_url,
+              },
+              ...existing,
+            ].slice(0, 3);
+          } else if (!liked) {
+            likers = existing.filter((liker) => liker.id !== me?.id);
+          }
+
           return {
             ...post,
-            likedByCurrentUser: res.data.liked,
-            likeCount: res.data.liked ? currentCount + 1 : currentCount - 1,
+            likers,
+            likedByCurrentUser: liked,
+            likeCount: liked ? currentCount + 1 : currentCount - 1,
           };
         })
       );
@@ -313,6 +379,19 @@ const ProfilePage = ({
   };
 
   const avatar = profileUser?.profile_url || skeletonProfile;
+  const otherFriends = Array.from(
+    profileFriends
+      .reduce((unique, record) => {
+        const friend =
+          record.sender_id === user_id ? record.req_receiver : record.req_sender;
+        if (friend?.id != null) unique.set(friend.id, friend);
+        return unique;
+      }, new Map<number, UserData>())
+      .values()
+  );
+  const visibleFriends = showAllFriends
+    ? otherFriends
+    : otherFriends.slice(0, 9);
 
   if (isOwnProfile) {
     return <Navigate to="/dashboard" replace />;
@@ -441,54 +520,41 @@ const ProfilePage = ({
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           {/* Left column — scrolls naturally with the page */}
           <aside className="w-full shrink-0 lg:w-[300px]">
-            <SideCard title="About">
-              <div className="flex flex-col gap-3.5 text-[13.5px] leading-relaxed text-ink-600">
-                <p className="flex items-start gap-3">
-                  <BsEnvelopeFill size={14} className="mt-0.5 shrink-0 text-sage-600" />
-                  <span className="break-words">{profileUser?.email || "—"}</span>
+            <SideCard title="Friends preview">
+              {otherFriends.length === 0 ? (
+                <p className="text-[13px] leading-relaxed text-ink-400">
+                  No friends to show yet.
                 </p>
-                <p className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
-                    <span className="text-[13px] font-bold text-sage-600">CH</span>
-                  </span>
-                  Part of the ConnectHub circle
-                </p>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {visibleFriends.map((friend) => (
+                      <div
+                        key={friend.id}
+                        onClick={() => navigate(`/users/${friend.id}`)}
+                        className="group cursor-pointer overflow-hidden rounded-xl bg-ivory-100 transition-all duration-200 hover:shadow-luxe"
+                      >
+                        <img
+                          src={friend.profile_url || skeletonProfile}
+                          alt={friend.user_name}
+                          className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {otherFriends.length > 9 && (
+                    <button
+                      onClick={() => setShowAllFriends((current) => !current)}
+                      className="mt-3 w-full rounded-xl bg-ivory-100 py-2 text-[12.5px] font-bold text-sage-700 transition-colors duration-150 hover:bg-sage-100"
+                    >
+                      {showAllFriends
+                        ? "Show less"
+                        : `View all ${otherFriends.length} friends`}
+                    </button>
+                  )}
+                </>
+              )}
             </SideCard>
-
-            <div className="card-luxe mt-5 p-5">
-              <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-300">
-                Activity
-              </h3>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between rounded-xl bg-ivory-100 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-clay-100 text-clay-600">
-                      <BsHeart size={13} />
-                    </span>
-                    <span className="text-[12.5px] font-bold uppercase tracking-wide text-ink-400">
-                      Likes
-                    </span>
-                  </div>
-                  <span style={serif} className="text-xl font-medium text-ink-900">
-                    {totalLikes.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-ivory-100 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sage-100 text-sage-700">
-                      <HiOutlinePencilAlt size={13} />
-                    </span>
-                    <span className="text-[12.5px] font-bold uppercase tracking-wide text-ink-400">
-                      Posts
-                    </span>
-                  </div>
-                  <span style={serif} className="text-xl font-medium text-ink-900">
-                    {posts.length.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
           </aside>
 
           {/* Right column — posts */}
@@ -512,7 +578,7 @@ const ProfilePage = ({
             ) : (
               <div className="flex flex-col gap-6">
                 {posts.map((post) => (
-                  <div key={post.id} className="card-luxe card-hover overflow-hidden">
+                  <div key={post.id} className="card-luxe overflow-hidden">
                     {/* Post header */}
                     <div className="flex items-center gap-3 px-6 pt-6 pb-4 sm:px-7">
                       <img
@@ -526,13 +592,19 @@ const ProfilePage = ({
                         </p>
                         <div className="mt-1 flex items-center gap-1.5">
                           {post.visiblity === "all" ? (
-                            <BsGlobe className="shrink-0 text-ink-300" size={9} />
+                            <BsGlobe className="shrink-0 text-ink-300" size={12} />
                           ) : (
-                            <BsLock className="shrink-0 text-ink-300" size={9} />
+                            <BsLock className="shrink-0 text-ink-300" size={12} />
                           )}
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                            {post.visiblity === "all" ? "Public" : "Only me"}
-                          </span>
+                          
+                          {post.created_at && (
+                            <>
+                              <span className="text-ink-300">·</span>
+                              <span className="text-[10px] font-medium text-ink-400">
+                                {formatPostTime(post.created_at)}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -547,18 +619,17 @@ const ProfilePage = ({
                     )}
 
                     {/* Media */}
-                    {post.media && post.media.filter(Boolean).length > 0 && (
-                      <div className="mt-1 border-t border-ivory-300 bg-ivory-200">
-                        {post.media.filter(Boolean).map((media) => (
-                          <img
-                            key={media.media_id}
-                            src={media.file_url}
-                            alt="post media"
-                            className="w-full max-h-[420px] object-cover"
-                          />
-                        ))}
-                      </div>
-                    )}
+                    <PostMedia media={post.media} />
+
+                    <LikersSummary
+                      likers={post.likers}
+                      likeCount={post.likeCount}
+                      isOwnPost={post.user_id === context?.user?.id}
+                      onOpen={() => {
+                        setLikesPostId(post.id);
+                        setShowLikesModal(true);
+                      }}
+                    />
 
                     {/* Actions */}
                     <div className="flex items-center border-t border-ivory-300 px-4 py-1">
@@ -572,17 +643,7 @@ const ProfilePage = ({
                       >
                         {post.likedByCurrentUser ? <FaThumbsUp size={13} /> : <FaRegThumbsUp size={13} />}
                         {post.likeCount > 0 ? (
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLikesPostId(post.id);
-                              setShowLikesModal(true);
-                            }}
-                            className="cursor-pointer hover:underline"
-                          >
-                            {post.likeCount}
-                            {" "}Like
-                          </span>
+                          <span>{post.likeCount} Like</span>
                         ) : (
                           <span>Like</span>
                         )}
