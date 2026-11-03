@@ -27,7 +27,7 @@ const RequestModal = ({ onClose }: { onClose: () => void }) => {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-2 pt-5">
         <h2 className="font-display text-[17px] font-medium text-ink-900">Friend Requests</h2>
-        <span className="chip bg-ivory-200 text-ink-500">Social</span>
+     
       </div>
 
       {/* Tabs */}
