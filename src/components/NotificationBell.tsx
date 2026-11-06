@@ -42,9 +42,18 @@ const timeAgo = (value?: string | null) => {
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 };
 
-const NotificationBell = () => {
+type NotificationBellProps = {
+  variant?: "navbar" | "tab";
+  placement?: "down" | "up";
+};
+
+const NotificationBell = ({
+  variant = "navbar",
+  placement = "down",
+}: NotificationBellProps) => {
   const context = useContext(UserDataContext);
   const navigate = useNavigate();
+  const isTab = variant === "tab";
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -181,34 +190,51 @@ const NotificationBell = () => {
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={isTab ? "relative flex-1" : "relative"}>
       <button
         onClick={handleToggle}
         aria-label="Notifications"
-        className={`flex flex-col items-center gap-1 rounded-xl p-2 transition-colors duration-150 ${
-          open
-            ? "bg-sage-100 text-sage-700"
-            : "text-ink-300 hover:bg-ivory-100 hover:text-ink-800"
+        className={`flex flex-col items-center gap-1 rounded-xl transition-colors duration-150 ${
+          isTab
+            ? `relative w-full px-1 py-2 ${open ? "text-sage-700" : "text-ink-400"}`
+            : `p-2 ${
+                open
+                  ? "bg-sage-100 text-sage-700"
+                  : "text-ink-300 hover:bg-ivory-100 hover:text-ink-800"
+              }`
         }`}
       >
+        {isTab && open && (
+          <span className="absolute -top-[1px] left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-full bg-sage-600" />
+        )}
         {open ? <HiBell size={22} /> : <HiOutlineBell size={22} />}
         <span
-          className={`hidden mt-1 text-[10px] font-semibold tracking-wide lg:block ${
-            open ? "text-sage-700" : "text-ink-300"
-          }`}
+          className={`mt-0.5 text-[10px] font-semibold tracking-wide ${
+            isTab ? "block text-[9.5px]" : "hidden lg:block"
+          } ${open ? "text-sage-700" : isTab ? "text-ink-400" : "text-ink-300"}`}
         >
           Notifications
         </span>
       </button>
 
       {unreadCount > 0 && (
-        <span className="pointer-events-none absolute right-1.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white">
+        <span
+          className={`pointer-events-none absolute flex h-4 min-w-[16px] items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white ${
+            isTab ? "left-1/2 top-1 ml-2" : "right-1.5 top-0.5"
+          }`}
+        >
           {unreadCount > 99 ? "99+" : unreadCount}
         </span>
       )}
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[350px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ivory-400 bg-white shadow-lift animate-fade-in">
+        <div
+          className={`z-50 overflow-hidden rounded-2xl border border-ivory-400 bg-white shadow-lift animate-fade-in ${
+            placement === "up"
+              ? "fixed inset-x-2 bottom-[calc(60px+env(safe-area-inset-bottom))] w-auto"
+              : "absolute right-0 top-full mt-2 w-[350px] max-w-[calc(100vw-2rem)]"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-ivory-300 px-5 py-4">
             <div>
               <h3 style={serif} className="text-[16px] font-medium text-ink-900">
@@ -228,7 +254,11 @@ const NotificationBell = () => {
             )}
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div
+            className={`overflow-y-auto ${
+              placement === "up" ? "max-h-[55vh]" : "max-h-[420px]"
+            }`}
+          >
             {loading ? (
               <div className="flex flex-col gap-3 p-4">
                 {[1, 2, 3].map((i) => (

@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { HiX } from "react-icons/hi"
 import FriendRequest from "./FriendRequest"
 import SentRequestList from "./SentRequestList"
 
-const RequestModal = ({ onClose }: { onClose: () => void }) => {
+const RequestModal = ({
+  onClose,
+  variant = "dropdown",
+}: {
+  onClose: () => void
+  variant?: "dropdown" | "sheet"
+}) => {
   const [activeTab, setActiveTab] = useState<"received" | "sent">("received")
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -12,22 +20,29 @@ const RequestModal = ({ onClose }: { onClose: () => void }) => {
         onClose()
       }
     }
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
     document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleEscape)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleEscape)
+    }
   }, [onClose])
 
-  return (
-    <div
-      ref={dropdownRef}
-      className="absolute right-5 top-[calc(100%+10px)] w-[360px] animate-scale-in overflow-hidden rounded-2xl border border-ivory-400 bg-white shadow-lift z-50"
-    >
-      {/* little caret pointing up at the nav button */}
-      <div className="absolute -top-1.5 right-6 h-3 w-3 rotate-45 border-t border-l border-ivory-400 bg-white" />
-
+  const content = (
+    <>
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-2 pt-5">
         <h2 className="font-display text-[17px] font-medium text-ink-900">Friend Requests</h2>
-     
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-ivory-100 hover:text-ink-800"
+        >
+          <HiX size={16} />
+        </button>
       </div>
 
       {/* Tabs */}
@@ -61,13 +76,46 @@ const RequestModal = ({ onClose }: { onClose: () => void }) => {
       </div>
 
       {/* Body */}
-      <div className="max-h-[500px] overflow-y-auto p-3">
+      <div
+        className={`overflow-y-auto p-3 ${
+          variant === "sheet" ? "max-h-[60vh]" : "max-h-[500px]"
+        }`}
+      >
         {activeTab === "received" ? (
           <FriendRequest showRequest={activeTab === "received"} />
         ) : (
           <SentRequestList showSentRequests={activeTab === "sent"} />
         )}
       </div>
+    </>
+  )
+
+  if (variant === "sheet") {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 bg-ink-900/40 md:hidden"
+        onMouseDown={onClose}
+      >
+        <div
+          ref={dropdownRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute inset-x-0 bottom-0 animate-fade-up overflow-hidden rounded-t-2xl border-t border-ivory-400 bg-white shadow-lift"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-ivory-500" />
+          {content}
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute right-5 top-[calc(100%+10px)] z-50 w-[360px] animate-scale-in overflow-hidden rounded-2xl border border-ivory-400 bg-white shadow-lift"
+    >
+      {content}
     </div>
   )
 }

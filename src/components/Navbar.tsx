@@ -9,10 +9,10 @@ import { HiUserGroup, HiOutlineUserGroup } from "react-icons/hi"
 import { BsSearch } from "react-icons/bs"
 import RequestModal from "./RequestModal"
 
-import { HiOutlineLogout } from "react-icons/hi"
 import ConfirmModal from "./ConfirmModal"
 import SearchBar from "./SearchBar"
 import NotificationBell from "./NotificationBell"
+import ProfileMenu from "./ProfileMenu"
 import skeletonProfile from "../assets/img/skeleton_profile.jpg"
 import { connectSocket, disconnectSocket } from "../lib/socket"
 
@@ -26,27 +26,43 @@ const Navbar = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [totalUnread, setTotalUnread] = useState(0)
   const [showRequestModal, setShowRequestModal] = useState(false)
-const [pendingRequestCount, setPendingRequestCount] = useState(0)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [pendingRequestCount, setPendingRequestCount] = useState(0)
+  const [isDesktop, setIsDesktop] = useState(
+    () => window.matchMedia("(min-width: 768px)").matches
+  )
 
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 768px)")
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches)
+    mql.addEventListener("change", onChange)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
 
-useEffect(() => {
-  if (!context?.user?.id) return
+  // Close any open menu whenever the route changes
+  useEffect(() => {
+    setShowProfileMenu(false)
+    setShowRequestModal(false)
+  }, [location.pathname])
 
-  const fetchPendingRequests = async () => {
-    try {
-      const res = await axios.get(
-        `${import.meta.env.VITE_BACKEND_API}/friend-request`,
-        { withCredentials: true }
-      )
-      setPendingRequestCount(res.data.friendRequest?.length ?? 0)
-    } catch (err) {
-      console.log("Error fetching pending requests", err)
+  useEffect(() => {
+    if (!context?.user?.id) return
+
+    const fetchPendingRequests = async () => {
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_BACKEND_API}/friend-request`,
+          { withCredentials: true }
+        )
+        setPendingRequestCount(res.data.friendRequest?.length ?? 0)
+      } catch (err) {
+        console.log("Error fetching pending requests", err)
+      }
     }
-  }
-  fetchPendingRequests()
-}, [context?.user?.id])
-  
- useEffect(() => {
+    fetchPendingRequests()
+  }, [context?.user?.id])
+
+  useEffect(() => {
     if (!context?.user?.id) {
       disconnectSocket()
       return
@@ -139,8 +155,28 @@ useEffect(() => {
   }
 
   const isActive = (path: string) => location.pathname === path
+  const messagesActive = location.pathname.startsWith("/messages")
+  const isChatThread = location.pathname.startsWith("/messages/")
 
+  const toggleRequests = () => {
+    setShowProfileMenu(false)
+    setShowRequestModal((open) => !open)
+  }
 
+  const toggleProfileMenu = () => {
+    setShowRequestModal(false)
+    setShowProfileMenu((open) => !open)
+  }
+
+  const openProfile = () => {
+    setShowProfileMenu(false)
+    navigate("/dashboard")
+  }
+
+  const openLogout = () => {
+    setShowProfileMenu(false)
+    setShowLogoutModal(true)
+  }
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-ivory-400/80 bg-white/90 backdrop-blur-xl">
@@ -154,92 +190,208 @@ useEffect(() => {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-900 shadow-sm">
             <span style={serif} className="text-[13px] font-medium text-white">CH</span>
           </div>
-          <span style={serif} className="hidden text-lg font-medium tracking-tight text-ink-900 sm:inline">ConnectHub</span>
+          <span style={serif} className="inline text-[15px] font-medium tracking-tight text-ink-900 sm:text-lg">ConnectHub</span>
         </div>
 
-        {/* Search — left side on desktop, icon on mobile */}
-        <div className="hidden min-w-0 flex-1 md:block md:max-w-[240px] lg:max-w-[340px]">
-          <SearchBar />
-        </div>
+        {isDesktop ? (
+          <>
+            {/* Search */}
+            <div className="hidden min-w-0 flex-1 md:block md:max-w-[240px] lg:max-w-[340px]">
+              <SearchBar />
+            </div>
 
-        {/* Main nav — Home, Messages, Profile, Requests all on the left */}
-        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
-          <button
-            onClick={() => navigate("/search")}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-ivory-100 hover:text-ink-800 md:hidden"
-            aria-label="Search"
-          >
-            <BsSearch size={17} />
-          </button>
+            {/* Main nav — Home, Messages */}
+            <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+              <NavButton
+                onClick={() => navigate("/homepage")}
+                active={isActive("/homepage")}
+                icon={isActive("/homepage") ? <HiHome size={20} /> : <HiOutlineHome size={20} />}
+                label="Home"
+              />
 
-          <NavButton
-            onClick={() => navigate("/homepage")}
-            active={isActive("/homepage")}
-            icon={isActive("/homepage") ? <HiHome size={20} /> : <HiOutlineHome size={20} />}
-            label="Home"
-          />
+              <div className="relative">
+                <NavButton
+                  onClick={() => navigate("/messages")}
+                  active={messagesActive}
+                  icon={messagesActive ? <IoChatbubble size={18} /> : <IoChatbubbleOutline size={18} />}
+                  label="Messages"
+                />
+                {totalUnread > 0 && (
+                  <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
+                    {totalUnread > 99 ? "99+" : totalUnread}
+                  </span>
+                )}
+              </div>
+            </div>
 
-          <div className="relative">
-            <NavButton
-              onClick={() => navigate("/messages")}
-              active={location.pathname.startsWith("/messages")}
-              icon={location.pathname.startsWith("/messages") ? <IoChatbubble size={18} /> : <IoChatbubbleOutline size={18} />}
-              label="Messages"
-            />
-            {totalUnread > 0 && (
-              <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
-                {totalUnread > 99 ? "99+" : totalUnread}
-              </span>
-            )}
+            {/* Notifications + Requests + Profile */}
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <NotificationBell />
+
+              <div className="relative">
+                <NavButton
+                  onClick={toggleRequests}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  active={showRequestModal}
+                  icon={showRequestModal ? <HiUserGroup size={18} /> : <HiOutlineUserGroup size={18} />}
+                  label="Requests"
+                />
+                {pendingRequestCount > 0 && (
+                  <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-gold-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
+                    {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+                  </span>
+                )}
+              </div>
+
+              <div className="relative">
+                <button
+                  onClick={toggleProfileMenu}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  aria-label="Profile menu"
+                  className={`group flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-150 sm:px-3 ${
+                    showProfileMenu ? "bg-sage-100" : "hover:bg-ivory-100"
+                  }`}
+                >
+                  <img
+                    src={user.profile_url || skeletonProfile}
+                    alt={user.user_name}
+                    className="h-7 w-7 rounded-full object-cover ring-1 ring-ivory-400"
+                  />
+                  <span
+                    className={`hidden text-[10px] font-medium tracking-wide lg:block ${
+                      showProfileMenu ? "text-sage-700" : "text-ink-300 group-hover:text-ink-600"
+                    }`}
+                  >
+                    Profile
+                  </span>
+                </button>
+
+                {showProfileMenu && (
+                  <ProfileMenu
+                    user={user}
+                    placement="down"
+                    onViewProfile={openProfile}
+                    onLogout={openLogout}
+                    onClose={() => setShowProfileMenu(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Mobile top bar — logo + search + messages only */
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            <button
+              onClick={() => navigate("/search")}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                isActive("/search")
+                  ? "bg-sage-100 text-sage-700"
+                  : "text-ink-500 hover:bg-ivory-100 hover:text-ink-800"
+              }`}
+              aria-label="Search"
+            >
+              <BsSearch size={19} />
+            </button>
+
+            <div className="relative">
+              <button
+                onClick={() => navigate("/messages")}
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                  messagesActive
+                    ? "bg-sage-100 text-sage-700"
+                    : "text-ink-500 hover:bg-ivory-100 hover:text-ink-800"
+                }`}
+                aria-label="Messages"
+              >
+                {messagesActive ? <IoChatbubble size={20} /> : <IoChatbubbleOutline size={20} />}
+              </button>
+              {totalUnread > 0 && (
+                <span className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-clay-600 px-0.5 text-[9px] font-bold text-white">
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              )}
+            </div>
           </div>
-
-         
-        </div>
-
-        {/* Notifications + Logout on the right */}
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <NotificationBell />
-           <button
-            onClick={() => navigate("/dashboard")}
-            className="group flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-ivory-100 sm:px-3"
-          >
-            <img
-              src={user.profile_url || skeletonProfile}
-              alt={user.user_name}
-              className="h-7 w-7 rounded-full object-cover ring-1 ring-ivory-400"
-            />
-            <span className="hidden text-[10px] font-medium tracking-wide text-ink-300 group-hover:text-ink-600 lg:block">
-              Profile
-            </span>
-          </button>
-
-          <div className="relative">
-            <NavButton
-              onClick={() => setShowRequestModal(!showRequestModal)}
-              active={showRequestModal}
-              icon={showRequestModal ? <HiUserGroup size={18} /> : <HiOutlineUserGroup size={18} />}
-              label="Requests"
-            />
-            {pendingRequestCount > 0 && (
-              <span className="absolute right-1 top-0.5 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-gold-600 px-0.5 text-[9px] font-bold text-white pointer-events-none">
-                {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setShowLogoutModal(true)}
-            disabled={loggingOut}
-            className="ml-1 flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold text-ink-400 transition-colors duration-150 hover:bg-clay-100 hover:text-clay-600 sm:px-3"
-          >
-            <HiOutlineLogout size={16} />
-            <span className="hidden sm:inline">{loggingOut ? "Signing out…" : "Logout"}</span>
-          </button>
-        </div>
+        )}
 
       </div>
+
       {showRequestModal && (
-        <RequestModal onClose={() => setShowRequestModal(false)} />
+        <RequestModal
+          variant={isDesktop ? "dropdown" : "sheet"}
+          onClose={() => setShowRequestModal(false)}
+        />
       )}
+
+      {/* Mobile bottom nav — Facebook style */}
+      {!isDesktop &&
+        !isChatThread &&
+        createPortal(
+          <div
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-ivory-400 bg-white"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <div className="mx-auto flex h-14 max-w-md items-stretch justify-around px-1">
+              <MobileTab
+                onClick={() => navigate("/homepage")}
+                active={isActive("/homepage")}
+                icon={isActive("/homepage") ? <HiHome size={22} /> : <HiOutlineHome size={22} />}
+                label="Home"
+              />
+
+              <NotificationBell variant="tab" placement="up" />
+
+              <div className="relative flex-1">
+                <MobileTab
+                  onClick={toggleRequests}
+                  active={showRequestModal}
+                  icon={showRequestModal ? <HiUserGroup size={20} /> : <HiOutlineUserGroup size={20} />}
+                  label="Requests"
+                />
+                {pendingRequestCount > 0 && (
+                  <span className="pointer-events-none absolute left-1/2 top-1 ml-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-gold-600 px-0.5 text-[9px] font-bold text-white">
+                    {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+                  </span>
+                )}
+              </div>
+
+              <div className="relative flex-1">
+                <button
+                  onClick={toggleProfileMenu}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  aria-label="Profile menu"
+                  className={`relative flex w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 transition-colors ${
+                    showProfileMenu || isActive("/dashboard")
+                      ? "text-sage-700"
+                      : "text-ink-400 hover:text-ink-800"
+                  }`}
+                >
+                  {(showProfileMenu || isActive("/dashboard")) && (
+                    <span className="absolute top-0 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-full bg-sage-600" />
+                  )}
+                  <img
+                    src={user.profile_url || skeletonProfile}
+                    alt={user.user_name}
+                    className="h-6 w-6 rounded-full object-cover ring-1 ring-ivory-400"
+                  />
+                  <span className="text-[9.5px] font-semibold tracking-wide">Profile</span>
+                </button>
+
+                {showProfileMenu && (
+                  <ProfileMenu
+                    user={user}
+                    placement="up"
+                    onViewProfile={openProfile}
+                    onLogout={openLogout}
+                    onClose={() => setShowProfileMenu(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {showLogoutModal &&
         createPortal(
           <ConfirmModal
@@ -258,17 +410,20 @@ useEffect(() => {
 
 const NavButton = ({
   onClick,
+  onMouseDown,
   active,
   icon,
   label,
 }: {
   onClick: () => void
+  onMouseDown?: (event: React.MouseEvent<HTMLButtonElement>) => void
   active: boolean
   icon: React.ReactNode
   label: string
 }) => (
   <button
     onClick={onClick}
+    onMouseDown={onMouseDown}
     className={`flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-150 sm:px-3 lg:px-4
       ${
         active
@@ -280,6 +435,31 @@ const NavButton = ({
     <span className={`hidden text-[10px] font-semibold tracking-wide lg:block ${active ? "text-sage-700" : "text-ink-300"}`}>
       {label}
     </span>
+  </button>
+)
+
+const MobileTab = ({
+  onClick,
+  active,
+  icon,
+  label,
+}: {
+  onClick: () => void
+  active: boolean
+  icon: React.ReactNode
+  label: string
+}) => (
+  <button
+    onClick={onClick}
+    className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 transition-colors ${
+      active ? "text-sage-700" : "text-ink-400 hover:text-ink-800"
+    }`}
+  >
+    {active && (
+      <span className="absolute top-0 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-full bg-sage-600" />
+    )}
+    {icon}
+    <span className="text-[9.5px] font-semibold tracking-wide">{label}</span>
   </button>
 )
 
